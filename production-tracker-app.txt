@@ -1,0 +1,319 @@
+// package.json
+{
+  "name": "production-tracker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.263.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3",
+    "vite": "^4.4.5"
+  }
+}
+
+// src/index.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// src/main.jsx
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+// src/App.jsx
+import React, { useState, useEffect } from 'react';
+import { Plus, Minus, FileSpreadsheet, UserPlus, Pencil, Check, X } from 'lucide-react';
+
+const App = () => {
+  const [departments, setDepartments] = useState([]);
+  const [newDepartment, setNewDepartment] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const [currentDate] = useState(new Date().toLocaleDateString('th-TH'));
+
+  useEffect(() => {
+    const savedDepartments = localStorage.getItem('departments');
+    if (savedDepartments) {
+      setDepartments(JSON.parse(savedDepartments));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('departments', JSON.stringify(departments));
+  }, [departments]);
+
+  const handleAddDepartment = () => {
+    if (newDepartment.trim()) {
+      setDepartments([
+        ...departments,
+        {
+          id: Date.now(),
+          name: newDepartment,
+          count: 0,
+          history: [{
+            date: currentDate,
+            count: 0
+          }]
+        }
+      ]);
+      setNewDepartment('');
+    }
+  };
+
+  const startEditing = (dept) => {
+    setEditingId(dept.id);
+    setEditingName(dept.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingName('');
+  };
+
+  const saveEditing = (deptId) => {
+    if (editingName.trim()) {
+      setDepartments(departments.map(dept => 
+        dept.id === deptId 
+          ? { ...dept, name: editingName.trim() }
+          : dept
+      ));
+      setEditingId(null);
+      setEditingName('');
+    }
+  };
+
+  const handleIncrement = (departmentId) => {
+    setDepartments(departments.map(dept => {
+      if (dept.id === departmentId) {
+        const updatedCount = dept.count + 1;
+        const updatedHistory = [...dept.history];
+        const todayRecord = updatedHistory.find(h => h.date === currentDate);
+        
+        if (todayRecord) {
+          todayRecord.count = updatedCount;
+        } else {
+          updatedHistory.push({
+            date: currentDate,
+            count: updatedCount
+          });
+        }
+
+        return {
+          ...dept,
+          count: updatedCount,
+          history: updatedHistory
+        };
+      }
+      return dept;
+    }));
+  };
+
+  const handleDecrement = (departmentId) => {
+    setDepartments(departments.map(dept => {
+      if (dept.id === departmentId && dept.count > 0) {
+        const updatedCount = dept.count - 1;
+        const updatedHistory = [...dept.history];
+        const todayRecord = updatedHistory.find(h => h.date === currentDate);
+        
+        if (todayRecord) {
+          todayRecord.count = updatedCount;
+        }
+
+        return {
+          ...dept,
+          count: updatedCount,
+          history: updatedHistory
+        };
+      }
+      return dept;
+    }));
+  };
+
+  const exportToCSV = () => {
+    let csvContent = 'แผนก,วันที่,จำนวนชิ้นงาน\n';
+    
+    departments.forEach(dept => {
+      dept.history.forEach(record => {
+        csvContent += `${dept.name},${record.date},${record.count}\n`;
+      });
+    });
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.style.display = 'none';
+    link.href = url;
+    link.download = `production_record_${currentDate}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 bg-white">
+      <div className="mb-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">บันทึกจำนวนชิ้นงาน - {currentDate}</h1>
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <FileSpreadsheet className="w-6 h-6" />
+            <span>ดาวน์โหลดรายงาน</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-6">
+        <input
+          type="text"
+          placeholder="ชื่อแผนก"
+          value={newDepartment}
+          onChange={(e) => setNewDepartment(e.target.value)}
+          className="flex-1 max-w-xs px-4 py-3 text-lg border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleAddDepartment}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          <UserPlus className="w-6 h-6" />
+          <span>เพิ่มแผนก</span>
+        </button>
+      </div>
+
+      <div className="grid gap-4">
+        {departments.map((department) => (
+          <div key={department.id} className="p-4 border rounded-lg shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {editingId === department.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="px-2 py-1 border rounded"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => saveEditing(department.id)}
+                      className="p-1 text-green-600 hover:bg-green-100 rounded"
+                    >
+                      <Check className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      className="p-1 text-red-600 hover:bg-red-100 rounded"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-xl font-medium">{department.name}</span>
+                    <button
+                      onClick={() => startEditing(department)}
+                      className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => handleDecrement(department.id)}
+                  className="h-16 w-16 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:bg-gray-100"
+                  disabled={department.count === 0}
+                >
+                  <Minus className="w-8 h-8" />
+                </button>
+                <div className="text-3xl font-bold w-24 text-center">
+                  {department.count}
+                </div>
+                <button
+                  onClick={() => handleIncrement(department.id)}
+                  className="h-16 w-16 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Plus className="w-8 h-8" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default App;
+
+// tailwind.config.js
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+
+// postcss.config.js
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+// vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+
+// index.html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ระบบบันทึกจำนวนชิ้นงาน</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
